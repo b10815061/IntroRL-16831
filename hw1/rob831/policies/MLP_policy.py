@@ -87,7 +87,7 @@ class MLPPolicy(BasePolicy, nn.Module, metaclass=abc.ABCMeta):
             action = torch.argmax(softmax,dim=-1)
         else:
             action = self.forward(observation)
-        return action
+        return ptu.to_numpy(action)
         # TODO return the action that the policy prescribes
 
     # update/train this policy

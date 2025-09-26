@@ -101,7 +101,8 @@ class MLPPolicy(BasePolicy, nn.Module, metaclass=abc.ABCMeta):
     # return more flexible objects, such as a
     # `torch.distributions.Distribution` object. It's up to you!
     def forward(self, observation: torch.FloatTensor) -> Any:
-        if self.discrete: return self.logits_na(observation)
+        if self.discrete: 
+            return self.logits_na(observation)
         else:
             mean = self.mean_net(observation)
             std = torch.exp(self.logstd)
@@ -130,8 +131,8 @@ class MLPPolicySL(MLPPolicy):
         if self.discrete:
             loss = self.loss(predicted,actions)
         else:
-            log_prob = predicted.log_prob(actions)
-            loss = -log_prob.mean()
+            predicted_action = predicted.rsample()
+            loss = self.loss(predicted_action,actions)
         
         self.optimizer.zero_grad()
         loss.backward()
@@ -139,5 +140,5 @@ class MLPPolicySL(MLPPolicy):
 
         return {
             # You can add extra logging information here, but keep this line
-            'Training Loss': ptu.to_numpy(loss),
+            'Training_Loss': ptu.to_numpy(loss),
         }

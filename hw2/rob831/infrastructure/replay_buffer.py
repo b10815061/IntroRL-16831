@@ -1,5 +1,5 @@
 from rob831.infrastructure.utils import *
-
+import numpy as np
 
 class ReplayBuffer(object):
 
@@ -65,7 +65,15 @@ class ReplayBuffer(object):
     ########################################
 
     def sample_random_data(self, batch_size):
-        # TODO: get this from hw1
+        assert (
+                self.obs.shape[0]
+                == self.acs.shape[0]
+                == self.rews.shape[0]
+                == self.next_obs.shape[0]
+                == self.terminals.shape[0]
+        )
+        rand_indices = np.random.permutation(self.obs.shape[0])[:batch_size]
+        return self.obs[rand_indices], self.acs[rand_indices], self.concatenated_rews[rand_indices], self.next_obs[rand_indices], self.terminals[rand_indices]
         raise NotImplementedError
 
     def sample_recent_data(self, batch_size=1, concat_rew=True):

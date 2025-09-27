@@ -46,8 +46,9 @@ class PGAgent(BaseAgent):
         # HINT1: use helper functions to compute qvals and advantages
         # HINT2: look at the MLPPolicyPG class for how to update the policy
             # and obtain a train_log
-
-        raise NotImplementedError
+        q_vals = self.calculate_q_vals(rewards_list)
+        advantages = self.estimate_advantage(observations,rewards_list,q_vals,terminals)
+        train_log = self.actor.update(observations,actions,advantages,q_vals)
 
         return train_log
 
@@ -73,15 +74,18 @@ class PGAgent(BaseAgent):
         # HINT3: q_values should be a 1D numpy array where the indices correspond to the same
         # ordering as observations, actions, etc.
 
+        Q_pi = []
         if not self.reward_to_go:
             #use the whole traj for each timestep
-            raise NotImplementedError
+            for rewards in rewards_list:
+                Q_pi.append(self._discounted_return(rewards))
 
         # Case 2: reward-to-go PG
         # Estimate Q^{pi}(s_t, a_t) by the discounted sum of rewards starting from t
         else:
-            raise NotImplementedError
-
+            for rewards in rewards_list:
+                Q_pi.append(self._discounted_cumsum(rewards))
+        q_values = np.concatenate(Q_pi) ## flatten for batching and index matching with obs, acts ...
         return q_values  # return an array
 
     def estimate_advantage(self, obs, rewards_list, q_values, terminals):
@@ -102,8 +106,7 @@ class PGAgent(BaseAgent):
                 ## that the predictions have the same mean and standard deviation as
                 ## the current batch of q_values
 
-            raise NotImplementedError
-            values = TODO
+            values = unnormalize(values_normalized,q_values.mean,q_values.std)
 
             if self.gae_lambda is not None:
                 ## append a dummy T+1 value for simpler recursive calculation
@@ -125,15 +128,16 @@ class PGAgent(BaseAgent):
                         ## 0 otherwise.
                     ## HINT 2: self.gae_lambda is the lambda value in the
                         ## GAE formula
-                    raise NotImplementedError
+                    V_t_plus_1 = values[i+1] * (1 - terminals[i]) 
+                    delta = rewards[i] + self.gamma*V_t_plus_1 - values[i]
+                    advantages[i] = delta +self.gamma * self.gae_lambda * advantages[i+1]
 
                 # remove dummy advantage
                 advantages = advantages[:-1]
 
             else:
                 ## TODO: compute advantage estimates using q_values, and values as baselines
-                # raise NotImplementedError
-                advantages = TODO
+                advantages = q_values - values
 
         # Else, just set the advantage to [Q]
         else:
@@ -144,8 +148,7 @@ class PGAgent(BaseAgent):
             ## TODO: standardize the advantages to have a mean of zero
             ## and a standard deviation of one
 
-            raise NotImplementedError
-            advantages = TODO
+            advantages = normalize(advantages,advantages.mean(),advantages.std())
 
         return advantages
 
@@ -172,9 +175,13 @@ class PGAgent(BaseAgent):
         """
 
         # TODO: create discounted_returns
-        raise NotImplementedError
+        n = len(rewards)
+        discounted_cumsums = self._discounted_cumsum(rewards)
+        G = discounted_cumsums[0] 
 
-        return discounted_returns
+        discounted_returns = [G] * n
+
+        return np.array(discounted_returns)
 
     def _discounted_cumsum(self, rewards):
         """
@@ -186,6 +193,10 @@ class PGAgent(BaseAgent):
         # TODO: create `discounted_cumsums`
         # HINT: it is possible to write a vectorized solution, but a solution
             # using a for loop is also fine
-        raise NotImplementedError
+        n = len(rewards)
+        discounted_cumsums = [0] * n
+        discounted_cumsums[-1] = rewards[-1]
+        for i in range(n-2,-1,-1):
+            discounted_cumsums[i] = rewards[i] + self.gamma * discounted_cumsums[i+1]
 
-        return discounted_cumsums
+        return np.array(discounted_cumsums)

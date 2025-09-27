@@ -155,10 +155,25 @@ class RL_Trainer(object):
 
     def collect_training_trajectories(self, itr, load_initial_expertdata, collect_policy, batch_size):
         # TODO: get this from hw1
+        if itr == 0:
+            with open(load_initial_expertdata,'w') as f:
+                trajs = f.load()
+            return trajs, 0 , None
+        paths,timesteps = utils.sample_n_trajectories(self.env,collect_policy,batch_size,self.params['ep_len'])
+        train_video_paths = None
+        if self.log_video:
+            print('\nCollecting train rollouts to be used for saving videos...')
+            train_video_paths = utils.sample_n_trajectories(self.env, collect_policy, MAX_NVIDEO, MAX_VIDEO_LEN, True)
+        return trajs,timesteps,train_video_paths
         raise NotImplementedError
 
     def train_agent(self):
-        # TODO: get this from hw1
+        all_logs = []
+        for train_step in range(self.params['num_agent_train_steps_per_iter']):
+            ob_batch, ac_batch, re_batch, next_ob_batch, terminal_batch = self.agent.sample(self.params['train_batch_size'])
+            train_log = self.agent.train(ob_batch, ac_batch, re_batch, next_ob_batch, terminal_batch)
+            all_logs.append(train_log)
+        return all_logs
         raise NotImplementedError
 
     ####################################

@@ -73,11 +73,11 @@ def sample_trajectory(env, policy, max_path_length, render=False, render_mode=('
                 time.sleep(env.model.opt.timestep)
 
         obs.append(ob)
-        ac = (policy.get_action())
+        ac = policy.get_action(ob)
         ac = ac[0]
         acs.append(ac)
-        new_ob,reward,done,_ = env.step(ac)
-        next_obs.append(new_ob)
+        ob,reward,done,_ = env.step(ac)
+        next_obs.append(ob)
         rewards.append(reward)
         steps += 1
 
@@ -98,18 +98,13 @@ def sample_trajectories(env, policy, min_timesteps_per_batch, max_path_length, r
         paths.append(p)
         timesteps += get_pathlength(p)
     return paths, timesteps
-    raise NotImplementedError
 
 def sample_n_trajectories(env, policy, ntraj, max_path_length, render=False, render_mode=('rgb_array')):
     # TODO: get this from hw1
     paths = []
     for i in range(ntraj):
-        paths.append(
-            sample_trajectory(env, policy, max_path_length, render, render_mode)
-        )
+        paths.append(sample_trajectory(env,policy,max_path_length,render,render_mode))
     return paths
-
-    raise NotImplementedError
 
 ############################################
 ############################################

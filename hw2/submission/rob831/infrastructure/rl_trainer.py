@@ -14,6 +14,9 @@ from rob831.infrastructure import utils
 from rob831.infrastructure.logger import Logger
 from rob831.infrastructure.action_noise_wrapper import ActionNoiseWrapper
 
+import concurrent.futures as futures
+import math
+
 # how many rollouts to save as videos to tensorboard
 MAX_NVIDEO = 2
 MAX_VIDEO_LEN = 40 # we overwrite this in the code below
@@ -22,6 +25,8 @@ MAX_VIDEO_LEN = 40 # we overwrite this in the code below
 class RL_Trainer(object):
 
     def __init__(self, params):
+        print('initializing')
+        print(os.environ.get('LD_LIBRARY_PATH'))
 
         #############
         ## INIT
@@ -133,6 +138,7 @@ class RL_Trainer(object):
                                 initial_expertdata, collect_policy,
                                 self.params['batch_size'])
             paths, envsteps_this_batch, train_video_paths = training_returns
+            # print('paths: ' , paths[0])
             self.total_envsteps += envsteps_this_batch
 
             # add collected data to replay buffer
@@ -156,25 +162,45 @@ class RL_Trainer(object):
     def collect_training_trajectories(self, itr, load_initial_expertdata, collect_policy, batch_size):
         # TODO: get this from hw1
         if itr == 0:
-            with open(load_initial_expertdata,'w') as f:
-                trajs = f.load()
-            return trajs, 0 , None
-        paths,timesteps = utils.sample_n_trajectories(self.env,collect_policy,batch_size,self.params['ep_len'])
+          if load_initial_expertdata:
+            paths = pickle.load(open(self.params['expert_data'], 'rb'))
+            return paths, 0, None
+          else:
+            num_transitions_to_sample = self.params['batch_size_initial']
+        else:
+          num_transitions_to_sample = self.params['batch_size']
+
+        print("\nCollecting data to be used for training...")
+        # n_workers = self.params["n_workers"]
+        # per_worker = math.ceil(batch_size / n_workers)
+
+        # def worker(_):
+        #     return utils.sample_n_trajectories(
+        #         self.env, collect_policy, per_worker, self.params['ep_len']
+        #     )
+
+        # paths, timesteps = [], 0
+        # with futures.ProcessPoolExecutor(max_workers=n_workers) as executor:
+        #     results = list(executor.map(worker, range(n_workers)))
+        #     for worker_paths, worker_steps in results:
+        #         paths.extend(worker_paths)
+        #         timesteps += worker_steps
+        paths,timesteps = utils.sample_trajectories(self.env,collect_policy,batch_size,self.params['ep_len'])
         train_video_paths = None
         if self.log_video:
             print('\nCollecting train rollouts to be used for saving videos...')
             train_video_paths = utils.sample_n_trajectories(self.env, collect_policy, MAX_NVIDEO, MAX_VIDEO_LEN, True)
-        return paths,timesteps,train_video_paths
-        raise NotImplementedError
+        return paths, timesteps, train_video_paths
 
     def train_agent(self):
         all_logs = []
         for train_step in range(self.params['num_agent_train_steps_per_iter']):
             ob_batch, ac_batch, re_batch, next_ob_batch, terminal_batch = self.agent.sample(self.params['train_batch_size'])
+            # print(np.random.randint(100))
+            # print('ob_batch:' , np.sum(ob_batch))
             train_log = self.agent.train(ob_batch, ac_batch, re_batch, next_ob_batch, terminal_batch)
             all_logs.append(train_log)
         return all_logs
-        raise NotImplementedError
 
     ####################################
     ####################################
@@ -226,6 +252,44 @@ class RL_Trainer(object):
             logs["Train_MaxReturn"] = np.max(train_returns)
             logs["Train_MinReturn"] = np.min(train_returns)
             logs["Train_AverageEpLen"] = np.mean(train_ep_lens)
+
+            def flatten_args(prefix, v):
+              """
+              Flatten value into logs:
+                - Keep numeric values (int, float, bool)
+                - Convert None -> -1
+                - Recursively flatten dicts
+                - Handle lists/arrays of numerics
+                - Skip anything else
+              """
+              if isinstance(v, dict):
+                  for k_sub, v_sub in v.items():
+                      flatten_args(f"{prefix}_{k_sub}", v_sub)
+              elif isinstance(v, (int, float, bool)):
+                  logs[prefix] = v
+              elif v is None:
+                  logs[prefix] = -1
+              elif isinstance(v, (list, tuple, np.ndarray)):
+                  # Only keep if all elements are numeric
+                  arr = np.array(v)
+                  if np.issubdtype(arr.dtype, np.number):
+                      # log each element with index
+                      for i, val in enumerate(arr):
+                          logs[f"{prefix}_{i}"] = val
+              else:
+                  # skip strings or unsupported types
+                  pass
+
+            # iterate over all attributes of args
+            args_dict = {
+                k: getattr(self.params, k)
+                for k in dir(self.params)
+                if not k.startswith("__") and not callable(getattr(self.params, k))
+            }
+
+            for k, v in args_dict.items():
+                flatten_args(f"Args_{k}", v)
+
 
             logs["Train_EnvstepsSoFar"] = self.total_envsteps
             logs["TimeSinceStart"] = time.time() - self.start_time
